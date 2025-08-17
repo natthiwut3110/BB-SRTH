@@ -1,0 +1,691 @@
+ <!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blood bank SRTH — Stock (Bootstrap)</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Chart.js + html2pdf -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body{background:#f8fafc;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans Thai',Sarabun,Arial}
+    .app-header{background:#b91c1c;color:#fff}
+    .sticky-actions{position:sticky;bottom:0;z-index:1020;background:#fff;border-top:1px solid #e5e7eb}
+    .card-hover:hover{box-shadow:0 .5rem 1rem rgba(0,0,0,.08)}
+    .qty-btn{min-width:3rem}
+    .badge-low{background:#fff3cd;color:#7a5b00;border:1px solid #ffe69c}
+    .img-box{width:88px;height:88px;border-radius:.75rem;overflow:hidden;background:#f1f3f5;display:grid;place-items:center}
+    .img-box img{width:100%;height:100%;object-fit:cover}
+.delta {
+  font-size: .9rem;
+  height: 34px;
+}
+.item-qty {
+  font-size: 1rem;
+}
+.delta-box{
+  width: 64px;      /* เล็กกว่าช่อง qty */
+  font-size: .9rem; /* ตัวอักษรเล็กลง */
+  height: 34px;     /* ให้สูงพอดีกับปุ่ม */
+}
+.delta-plus[readonly],
+.delta-minus[readonly]{
+  background: #f8f9fa;
+}
+/* ชิปตัวเลขค้างข้างปุ่ม + / - */
+.delta-chip{
+  display:inline-block;
+  min-width:28px;
+  text-align:center;
+  font-size:.9rem;
+  padding:.15rem .4rem;
+  background:#f1f5f9;
+  border-radius:.5rem;
+  line-height:1.1;
+}
+.plus {
+  background-color: #d4f8d4;   /* เขียวอ่อน */
+  color: #064d06;              /* เขียวเข้มเล็กน้อยสำหรับตัวอักษร */
+  border: 1px solid #9cd99c;
+}
+
+.minus {
+  background-color: #f8d4d4;   /* แดงอ่อน */
+  color: #800000;              /* แดงเข้มสำหรับตัวอักษร */
+  border: 1px solid #e19c9c;
+}
+.plus, .minus {
+  border-radius: 8px;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+.plus:hover {
+  background-color: #baf0ba;
+}
+
+.minus:hover {
+  background-color: #f0baba;
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header py-3">
+    <div class="container d-flex align-items-center gap-3">
+      <div class="bg-white text-danger fw-bold rounded-3 d-grid place-items-center" style="width:40px;height:40px">BB</div>
+      <div class="flex-grow-1">
+        <h1 class="h5 mb-0">Blood bank SRTH — ระบบเช็คสต็อก</h1>
+        <small class="opacity-75">มือถือพร้อม • ปุ่มใหญ่ • PDF/CSV • กราฟ • ผู้ใช้+PIN รายคน</small>
+      </div>
+      <div class="d-none d-md-flex gap-2">
+        <button id="exportCsvBtn" class="btn btn-light btn-sm">ส่งออก CSV</button>
+        <button id="exportPdfBtn" class="btn btn-light btn-sm">ส่งออก PDF</button>
+        <button id="settingsBtn" class="btn btn-outline-light btn-sm">ตั้งค่า</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Nav tabs -->
+  <nav class="bg-white border-bottom">
+    <div class="container">
+      <ul class="nav nav-pills gap-2 py-2" id="topTabs">
+        <li class="nav-item"><button class="nav-link active" data-tab="stock">สต็อก</button></li>
+        <li class="nav-item"><button class="nav-link" data-tab="history">ประวัติ</button></li>
+        <li class="nav-item"><button class="nav-link" data-tab="stats">สถิติ</button></li>
+        <li class="nav-item"><button class="nav-link" data-tab="users">ผู้ใช้งาน</button></li>
+        <li class="nav-item d-md-none ms-auto"><button id="settingsBtn2" class="btn btn-outline-secondary btn-sm">ตั้งค่า</button></li>
+        <li class="nav-item d-md-none"><button id="exportCsvBtn2" class="btn btn-outline-secondary btn-sm">CSV</button></li>
+        <li class="nav-item d-md-none"><button id="exportPdfBtn2" class="btn btn-outline-secondary btn-sm">PDF</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container py-3">
+
+    <!-- STOCK -->
+    <section id="tab-stock" class="tab-pane">
+      <div class="card card-hover mb-3">
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md">
+              <label class="form-label">ค้นหา/กรอง</label>
+              <input id="searchInput" class="form-control" placeholder="ชื่อรายการ…">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">เรียงตาม</label>
+              <select id="sortSelect" class="form-select">
+                <option value="name">ชื่อ (ก-ฮ)</option>
+                <option value="qty-desc">จำนวน (มาก→น้อย)</option>
+                <option value="qty-asc">จำนวน (น้อย→มาก)</option>
+                <option value="updated-desc">อัปเดตล่าสุด</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-auto d-flex gap-2">
+              <button id="addItemBtn" class="btn btn-danger">เพิ่มรายการ</button>
+              <button id="commitBtn" class="btn btn-danger">เสร็จสิ้น/ยืนยัน</button>
+              <button id="discardBtn" class="btn btn-outline-secondary">ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="itemsGrid" class="row g-3"></div>
+      <div class="text-muted small">* จะยังไม่บันทึกจนกว่าจะกด “เสร็จสิ้น/ยืนยัน” และใส่ PIN</div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="tab-history" class="tab-pane d-none">
+      <div class="card card-hover mb-3">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-4">
+              <label class="form-label">ตั้งแต่วันที่</label>
+              <input type="date" id="fromDate" class="form-control">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">ถึงวันที่</label>
+              <input type="date" id="toDate" class="form-control">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">คำค้น</label>
+              <input id="historySearch" class="form-control" placeholder="ชื่อรายการ/ผู้ใช้">
+            </div>
+            <div class="col-12">
+              <button id="filterHistoryBtn" class="btn btn-outline-secondary">กรอง</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-hover">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-danger">
+              <tr><th>วันที่-เวลา</th><th>ผู้ใช้</th><th>รายการ</th><th class="text-end">ก่อน</th><th class="text-end">เปลี่ยน</th><th class="text-end">หลัง</th></tr>
+            </thead>
+            <tbody id="historyTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section id="tab-stats" class="tab-pane d-none">
+      <div class="card card-hover mb-3">
+        <div class="card-body d-flex gap-3 align-items-end">
+          <div>
+            <label class="form-label">ประเภทกราฟ</label>
+            <select id="chartType" class="form-select">
+              <option value="bar">Bar (คงเหลือ)</option>
+              <option value="line">Line (คงเหลือ)</option>
+            </select>
+          </div>
+          <button id="refreshChartBtn" class="btn btn-outline-secondary">รีเฟรชกราฟ</button>
+        </div>
+      </div>
+      <div class="card card-hover" style="height:360px">
+        <div class="card-body">
+          <canvas id="stockChart" style="height:100%"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- USERS -->
+    <section id="tab-users" class="tab-pane d-none">
+      <div class="card card-hover mb-3">
+        <div class="card-body">
+          <h5 class="card-title">โหมดเข้าใช้งาน</h5>
+          <div class="form-check"><input class="form-check-input authMode" type="radio" name="authMode" value="open" id="modeOpen"><label for="modeOpen" class="form-check-label">โหมดเปิด</label></div>
+          <div class="form-check"><input class="form-check-input authMode" type="radio" name="authMode" value="signup" id="modeSignup"><label for="modeSignup" class="form-check-label">สมัครใช้งาน (สูงสุด 20)</label></div>
+        </div>
+      </div>
+
+      <div id="signupPanel" class="card card-hover mb-3 d-none">
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md">
+              <label class="form-label">ชื่อผู้ใช้ใหม่</label>
+              <input id="newUserName" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">PIN (4–8)</label>
+              <input id="newUserPin" class="form-control" maxlength="8">
+            </div>
+            <div class="col-md-auto">
+              <button id="addUserBtn" class="btn btn-danger">เพิ่มผู้ใช้</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="card-title mb-0">ผู้ใช้</h5>
+            <small id="userCount" class="text-muted"></small>
+          </div>
+          <div id="usersList" class="row g-2"></div>
+        </div>
+      </div>
+
+      <div class="card card-hover">
+        <div class="card-body">
+          <h5 class="card-title">การจัดการข้อมูลเครื่องนี้</h5>
+          <button id="clearAllBtn" class="btn btn-outline-danger">ล้างข้อมูลทั้งหมด</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sticky bottom actions on mobile -->
+  <div class="sticky-actions py-2 d-md-none">
+    <div class="container d-grid gap-2" style="grid-template-columns:1fr 1fr 1fr">
+      <button id="abAdd" class="btn btn-outline-secondary">＋ เพิ่ม</button>
+      <button id="abDiscard" class="btn btn-outline-secondary">ยกเลิก</button>
+      <button id="abCommit" class="btn btn-danger">เสร็จสิ้น/ยืนยัน</button>
+    </div>
+  </div>
+
+  <!-- Hidden area for PDF -->
+  <div id="printArea" class="p-4" style="display:none">
+    <h4 class="mb-2">Blood bank SRTH — รายงานประวัติการเคลื่อนไหวสต็อก</h4>
+    <div id="summaryBlock" class="small text-muted mb-2"></div>
+    <table class="table table-sm">
+      <thead class="table-danger">
+        <tr><th>วันที่-เวลา</th><th>ผู้ใช้</th><th>รายการ</th><th class="text-end">ก่อน</th><th class="text-end">เปลี่ยน</th><th class="text-end">หลัง</th></tr>
+      </thead>
+      <tbody id="printTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal root -->
+  <div id="modalRoot"></div>
+
+<script>
+const KEYS={items:'bb_srth_items',history:'bb_srth_history',users:'bb_srth_users',authMode:'bb_srth_auth_mode',currentUserId:'bb_srth_current_user',lowThreshold:'bb_srth_low_threshold'};
+let state={items:[],history:[],users:[],authMode:'open',currentUserId:null,lowThreshold:5,filters:{search:'',sort:'name'}};
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const fmtDT=ts=>new Date(ts).toLocaleString('th-TH');
+const uid=()=> (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
+
+function saveAll(){ localStorage.setItem(KEYS.items,JSON.stringify(state.items)); localStorage.setItem(KEYS.history,JSON.stringify(state.history)); localStorage.setItem(KEYS.users,JSON.stringify(state.users)); localStorage.setItem(KEYS.authMode,state.authMode); localStorage.setItem(KEYS.currentUserId,state.currentUserId??''); localStorage.setItem(KEYS.lowThreshold,String(state.lowThreshold??5)); }
+function loadAll(){ state.items=JSON.parse(localStorage.getItem(KEYS.items)||'[]'); state.history=JSON.parse(localStorage.getItem(KEYS.history)||'[]'); state.users=JSON.parse(localStorage.getItem(KEYS.users)||'[]'); state.authMode=localStorage.getItem(KEYS.authMode)||'open'; state.currentUserId=localStorage.getItem(KEYS.currentUserId)||null; state.lowThreshold=parseInt(localStorage.getItem(KEYS.lowThreshold)||'5',10); state.items.forEach(it=>{if(typeof it.pendingDelta!=='number') it.pendingDelta=0;}); }
+
+function switchTab(tab){ ['stock','history','stats','users'].forEach(t=>$('#tab-'+t).classList.toggle('d-none',t!==tab)); $$('#topTabs .nav-link').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); if(tab==='stats') renderStats(); }
+function getCurrentUser(){ return state.users.find(u=>u.id===state.currentUserId)||null; }
+function requireLoginIfNeeded(){ if(state.authMode==='signup' && !getCurrentUser()){ showLoginModal(); return true } return false; }
+
+function renderUsers(){
+  $$('.authMode').forEach(r=>r.checked=(r.value===state.authMode));
+  $('#signupPanel').classList.toggle('d-none',state.authMode!=='signup');
+  const list=$('#usersList'); list.innerHTML='';
+  state.users.forEach(u=>{
+    const col=document.createElement('div'); col.className='col-sm-6 col-lg-4';
+    col.innerHTML=`<div class="border rounded-3 p-3 h-100 d-flex justify-content-between align-items-start">
+      <div><div class="fw-semibold">${u.name}</div><div class="text-muted small">ID: ${u.id.slice(0,8)}…</div></div>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary" data-act="reset" data-id="${u.id}">รีเซ็ต PIN</button>
+        <button class="btn btn-outline-danger" data-act="remove" data-id="${u.id}">ลบ</button>
+      </div></div>`;
+    list.appendChild(col);
+  });
+  $('#userCount').textContent=`${state.users.length}/20 คน`;
+}
+
+function renderItems(){
+  let items=[...state.items];
+  const q=state.filters.search.trim().toLowerCase();
+  if(q) items=items.filter(it=>(it.name||'').toLowerCase().includes(q));
+  switch(state.filters.sort){
+    case 'name': items.sort((a,b)=>(a.name||'').localeCompare(b.name||'')); break;
+    case 'qty-desc': items.sort((a,b)=>(b.qty||0)-(a.qty||0)); break;
+    case 'qty-asc': items.sort((a,b)=>(a.qty||0)-(b.qty||0)); break;
+    case 'updated-desc': items.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)); break; /* แก้ให้ใหม่→เก่า */
+  }
+  const grid=$('#itemsGrid'); grid.innerHTML='';
+  items.forEach(it=>{
+    const col=document.createElement('div'); col.className='col-12 col-md-6 col-lg-4';
+    const low=(it.qty||0) <= (state.lowThreshold||5);
+    col.innerHTML=`<div class="card h-100 card-hover">
+      <div class="card-body d-flex gap-3">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-start justify-content-between gap-2">
+            <input class="form-control form-control-sm fw-semibold item-name" value="${it.name||''}">
+            <small class="text-muted ms-2 item-updated">${it.updatedAt? (fmtDT(it.updatedAt) + (it.updatedBy? ` • โดย ${it.updatedBy}`:'')) : '—'}</small>
+          </div>
+          <div class="d-flex align-items-center gap-2 mt-2 controls-row">
+  <button class="btn btn-outline-secondary qty-btn minus">−</button>
+  <span class="delta-chip ${ (it.pendingDelta||0) < 0 ? '' : 'd-none' }">
+    ${ Math.abs(it.pendingDelta||0) }
+  </span>
+
+  <button class="btn btn-outline-secondary qty-btn plus">+</button>
+  <span class="delta-chip ${ (it.pendingDelta||0) > 0 ? '' : 'd-none' }">
+    ${ it.pendingDelta||0 }
+  </span>
+
+  <button class="btn btn-outline-danger btn-sm ms-auto delete-item">ลบ</button>
+</div>
+          ${low? `<span class="badge badge-low mt-2">ต่ำกว่า ${state.lowThreshold||5}</span>`:''}
+        </div>
+      </div>
+    </div>`;
+    const node = col.querySelector('.card');
+
+// ===== เพิ่ม badge "คงเหลือจริง" =====
+{
+  const qty = parseInt(it.qty||0,10) || 0; // คงเหลือจริง
+
+  const badge = document.createElement('span');
+  badge.className = 'badge bg-light text-dark total-badge ms-1';
+  badge.textContent = `คงเหลือจริง: ${qty}`;
+
+  const row = node.querySelector('.controls-row');
+  const smallPending = row?.querySelector('small');
+  const beforeNode = row?.querySelector('.file-input');
+
+  if (smallPending) {
+    smallPending.insertAdjacentElement('afterend', badge);
+  } else if (beforeNode) {
+    beforeNode.insertAdjacentElement('beforebegin', badge);
+  } else {
+    row?.appendChild(badge);
+  }
+}
+// ===== จบ badge =====
+
+    // อีเวนต์เดิมทั้งหมด (ไม่แตะ)
+    node.querySelector('.plus').onclick=()=>{ it.pendingDelta=(it.pendingDelta||0)+1; saveAll(); renderItems(); };
+    node.querySelector('.minus').onclick=()=>{ it.pendingDelta=(it.pendingDelta||0)-1; saveAll(); renderItems(); };
+
+    node.querySelector('.item-name').onchange=e=>{
+      const newName = e.target.value.trim();
+      const oldName = it.name||'';
+      if(newName===oldName) return;
+      withUserPin('แก้ชื่อรายการ', (user)=>{
+        it.name = newName;
+        it.updatedAt = Date.now();
+        it.updatedBy = user.name;
+        saveAll(); renderItems(); renderHistory();
+      });
+    };
+    node.querySelector('.delete-item').onclick=()=>{
+      showConfirmModal('ยืนยันการลบรายการนี้?', ()=>{
+        withUserPin('ลบรายการ', (user)=>{
+          state.items = state.items.filter(x=>x.id!==it.id);
+          saveAll(); renderItems(); renderHistory();
+        });
+      });
+    };
+
+    grid.appendChild(col);
+  });
+}
+
+function confirmDeleteItem(id){ }
+function handleImageUpload(){ }
+
+/* แก้ให้เพิ่มรายการต้องยืนยัน PIN + ตั้ง updatedBy */
+function addItem(){
+  withUserPin('เพิ่มรายการ', (user)=>{
+    const it={id:uid(),name:'รายการใหม่',qty:0,img:'',updatedAt:Date.now(),updatedBy:user.name,pendingDelta:0};
+    state.items.push(it);
+    saveAll(); renderItems();
+  });
+}
+
+function discardPending(){ state.items.forEach(it=>it.pendingDelta=0); saveAll(); renderItems(); }
+
+function commitChangesFlow(){
+  const hasChange=state.items.some(it=>(it.pendingDelta||0)!==0);
+  if(!hasChange){ toast('ไม่มีการเปลี่ยนแปลงค้างอยู่'); return; }
+  verifyUserPinFlow(user=>{
+    const uname=user.name, ts=Date.now();
+    state.items.forEach(it=>{
+      const d=parseInt(it.pendingDelta||0,10)||0;
+      if(d!==0){
+        const before=parseInt(it.qty||0,10)||0;
+        const after=before+d;
+        it.qty=after; it.pendingDelta=0; it.updatedAt=ts; it.updatedBy=uname;
+        state.history.unshift({ts,user:uname,itemId:it.id,itemName:it.name,before,change:d,after});
+      }
+    });
+    saveAll(); renderItems(); renderHistory(); notifyLowStock(); toast('บันทึกแล้ว');
+  });
+}
+
+function renderHistory(){
+  const tbody=$('#historyTable'); tbody.innerHTML='';
+  const q=($('#historySearch').value||'').toLowerCase();
+  const from=$('#fromDate').value? new Date($('#fromDate').value).setHours(0,0,0,0):null;
+  const to=$('#toDate').value? new Date($('#toDate').value).setHours(23,59,59,999):null;
+  let rows=[...state.history];
+  if(from) rows=rows.filter(r=>r.ts>=from);
+  if(to) rows=rows.filter(r=>r.ts<=to);
+  if(q) rows=rows.filter(r=>(r.itemName||'').toLowerCase().includes(q)||(r.user||'').toLowerCase().includes(q));
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${fmtDT(r.ts)}</td><td>${r.user||'-'}</td><td>${r.itemName||'-'}</td>
+      <td class="text-end">${r.before}</td>
+      <td class="text-end ${r.change>=0?'text-success':'text-danger'}">${r.change>0?'+':''}${r.change}</td>
+      <td class="text-end">${r.after}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* แก้ CSV ให้มี BOM + ใช้ \n */
+function exportCsv(){
+  const header=['Datetime','User','Item','Before','Change','After'];
+  const lines=[header.join(',')];
+  state.history.forEach(r=>{
+    const name=(r.itemName||'').split(',').join(' ');
+    lines.push([new Date(r.ts).toISOString(), r.user||'', name, r.before, r.change, r.after].join(','));
+  });
+  const csv='\ufeff'+lines.join('\n'); // BOM + LF (Safari-safe)
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='bb-srth-history.csv'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+
+function calcHistoryFiltered(){
+  const q=($('#historySearch').value||'').toLowerCase();
+  const from=$('#fromDate').value? new Date($('#fromDate').value).setHours(0,0,0,0):null;
+  const to=$('#toDate').value? new Date($('#toDate').value).setHours(23,59,59,999):null;
+  let rows=[...state.history];
+  if(from) rows=rows.filter(r=>r.ts>=from);
+  if(to) rows=rows.filter(r=>r.ts<=to);
+  if(q) rows=rows.filter(r=>(r.itemName||'').toLowerCase().includes(q)||(r.user||'').toLowerCase().includes(q));
+  return rows;
+}
+
+function exportPdf(){
+  const rows=calcHistoryFiltered();
+  const totalAdd=rows.reduce((s,r)=>s+(r.change>0?r.change:0),0);
+  const totalRemove=rows.reduce((s,r)=>s+(r.change<0?Math.abs(r.change):0),0);
+  const net=totalAdd-totalRemove;
+  const totalStock=state.items.reduce((s,it)=>s+(parseInt(it.qty||0,10)||0),0);
+
+  const area=$('#printArea'), tbody=$('#printTable'), sum=$('#summaryBlock');
+  tbody.innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${fmtDT(r.ts)}</td><td>${r.user||'-'}</td><td>${r.itemName||'-'}</td>
+      <td class="text-end">${r.before}</td><td class="text-end">${r.change>0?'+':''}${r.change}</td><td class="text-end">${r.after}</td>`;
+    tbody.appendChild(tr);
+  });
+  const fromTxt=$('#fromDate').value||'-', toTxt=$('#toDate').value||'-';
+  sum.innerHTML=`ช่วงวันที่: <b>${fromTxt}</b> ถึง <b>${toTxt}</b><br>
+  สร้างเมื่อ: ${new Date().toLocaleString('th-TH')}<br>
+  <b>สรุป (Totals)</b> — เพิ่มทั้งหมด: ${totalAdd} • ลดทั้งหมด: ${totalRemove} • สุทธิ: ${net} • สต็อกรวมปัจจุบัน: ${totalStock}`;
+  area.style.display='block';
+  const opt={margin:[20,20,20,20],filename:'bb-srth-history.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'pt',format:'a4',orientation:'portrait'}};
+  html2pdf().from(area).set(opt).save().then(()=>{area.style.display='none'});
+}
+
+function lowStockList(){ return state.items.filter(it=> (it.qty||0) <= (state.lowThreshold||5)); }
+function notifyLowStock(){ const lows=lowStockList(); if(!lows.length) return; const names=lows.slice(0,5).map(it=>`${it.name||'รายการ'} (${it.qty||0})`).join(', '); toast(`สต็อกต่ำกว่า ${state.lowThreshold||5}: `+names+(lows.length>5?' …':'')); }
+
+function openSettings(){
+  showModal(html=>{
+    html.innerHTML=`<h5 class="mb-3">ตั้งค่า</h5>
+      <div class="mb-3">
+        <label class="form-label">แจ้งเตือนสต็อกต่ำ (ชิ้น)</label>
+        <input id="lowSet" type="number" min="0" class="form-control" value="${state.lowThreshold||5}">
+        <div class="form-text">ต้องยืนยันด้วย PIN ของผู้ใช้</div>
+      </div>
+      <div class="d-grid gap-2">
+        <button id="saveAllSet" class="btn btn-danger">บันทึก</button>
+        <button class="btn btn-outline-secondary" data-close>ปิด</button>
+      </div>`;
+    html.querySelector('#saveAllSet').onclick=()=>{
+      const newLow=parseInt(html.querySelector('#lowSet').value||'5',10);
+      verifyUserPinFlow((user)=>{
+        state.lowThreshold=isNaN(newLow)?5:Math.max(0,newLow);
+        saveAll(); renderItems(); notifyLowStock(); toast(`บันทึกค่าขั้นต่ำแล้ว โดย ${user.name}`);
+      });
+    };
+  });
+}
+
+function showModal(builder){
+  const root=document.createElement('div'); root.className='modal fade show'; root.style.cssText='display:block;background:rgba(0,0,0,.35)';
+  const dialog=document.createElement('div'); dialog.className='modal-dialog'; const content=document.createElement('div'); content.className='modal-content';
+  root.appendChild(dialog); dialog.appendChild(content);
+  document.body.appendChild(root);
+  builder(content);
+  root.addEventListener('click',e=>{ if(e.target===root) root.remove(); });
+  content.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>root.remove()));
+  return { close(){ root.remove() } };
+}
+
+function showConfirmModal(msg,onYes){
+  showModal(html=>{
+    html.innerHTML=`<div class="modal-header"><h5 class="modal-title">ยืนยัน</h5></div>
+      <div class="modal-body">${msg}</div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-close>ยกเลิก</button>
+        <button class="btn btn-danger" id="yesBtn">ยืนยัน</button>
+      </div>`;
+    html.querySelector('#yesBtn').onclick=()=>{ onYes&&onYes(); html.parentElement.remove(); };
+  });
+}
+
+function askPinModal(title,onSubmit){
+  showModal(html=>{
+    html.innerHTML=`<div class="modal-header"><h5 class="modal-title">${title}</h5></div>
+      <div class="modal-body"><input id="pinField" class="form-control" type="password" placeholder="ใส่ PIN"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-close>ยกเลิก</button>
+        <button class="btn btn-danger" id="okBtn">ยืนยัน</button>
+      </div>`;
+    const pinEl=html.querySelector('#pinField'); pinEl.focus();
+    html.querySelector('#okBtn').onclick=async()=>{ const ok=await onSubmit((pinEl.value||'').trim()); if(ok!==false) html.parentElement.remove(); };
+  });
+}
+
+function showLoginModal(){
+  showModal(html=>{
+    const opts=state.users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+    html.innerHTML=`<div class="modal-header"><h5 class="modal-title">เข้าสู่ระบบ</h5></div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">ผู้ใช้</label><select id="loginUser" class="form-select">${opts}</select></div>
+        <div><label class="form-label">PIN</label><input id="loginPin" class="form-control" type="password" placeholder="PIN"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-close>ปิด</button>
+        <button class="btn btn-danger" id="loginBtn">เข้าสู่ระบบ</button>
+      </div>`;
+    html.querySelector('#loginBtn').onclick=()=>{
+      const id=html.querySelector('#loginUser').value; const pin=(html.querySelector('#loginPin').value||'').trim();
+      const u=state.users.find(x=>x.id===id); if(!u) return toast('ไม่พบผู้ใช้'); if(pin!==u.pin) return toast('PIN ไม่ถูกต้อง');
+      state.currentUserId=u.id; saveAll(); renderUsers(); html.parentElement.remove(); toast('เข้าสู่ระบบแล้ว');
+    };
+  });
+}
+
+function verifyUserPinFlow(onOk){
+  if(state.users.length===0){
+    toast('ยังไม่มีผู้ใช้ ให้สมัครก่อน');
+    return;
+  }
+
+  // เสมอ: ให้เลือกผู้ใช้ + ใส่ PIN ของคนนั้น (ทั้งโหมด open และ signup)
+  showModal(html=>{
+    const opts = state.users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+    html.innerHTML = `
+      <div class="modal-header"><h5 class="modal-title">ยืนยันผู้ทำรายการ</h5></div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label">ผู้ใช้</label>
+          <select id="who" class="form-select">${opts}</select>
+        </div>
+        <div>
+          <label class="form-label">PIN</label>
+          <input id="wpin" type="password" class="form-control" placeholder="PIN">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-close>ยกเลิก</button>
+        <button class="btn btn-danger" id="ok">ยืนยัน</button>
+      </div>
+    `;
+
+    // ตั้งค่า default เป็นคนที่ล็อกอิน (ถ้ามี)
+    const current = getCurrentUser();
+    if(current){ html.querySelector('#who').value = current.id; }
+
+    html.querySelector('#ok').onclick = ()=>{
+      const id  = html.querySelector('#who').value;
+      const pin = (html.querySelector('#wpin').value||'').trim();
+      const u   = state.users.find(x=>x.id===id);
+
+      if(!u){ toast('ไม่พบผู้ใช้'); return; }
+      if(pin !== u.pin){ toast('PIN ไม่ถูกต้อง'); return; }
+
+      // อัปเดต currentUserId ให้ตรงกับคนที่ยืนยัน PIN (สะดวกเวลาทำรายการต่อเนื่อง)
+      state.currentUserId = u.id;
+      saveAll();
+
+      html.parentElement.remove();
+      onOk(u);
+    };
+  });
+}
+
+
+function withUserPin(actionLabel, fn){
+  verifyUserPinFlow(user=>{ try{ fn(user); } finally { toast(`${actionLabel} โดย ${user.name}`); } });
+}
+
+function toast(msg){
+  const t=document.createElement('div'); t.className='toast align-items-center text-bg-dark border-0 position-fixed bottom-0 end-0 m-3';
+  t.role='alert'; t.innerHTML=`<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  document.body.appendChild(t); const toast=new bootstrap.Toast(t,{delay:2000}); toast.show(); t.addEventListener('hidden.bs.toast',()=>t.remove());
+}
+
+function renderStats(){
+  const el=$('#stockChart'); if(!el) return;
+  const labels=state.items.map(it=>it.name||'รายการ');
+  const data=state.items.map(it=>parseInt(it.qty||0,10)||0);
+  const type=$('#chartType')?.value || 'bar';
+  if(window._chart) window._chart.destroy();
+  window._chart=new Chart(el,{type,data:{labels,datasets:[{label:'คงเหลือ (ชิ้น)',data,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}});
+}
+
+function bindEvents(){
+  $$('#topTabs .nav-link').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));
+  const add=()=>{ if(requireLoginIfNeeded()) return; addItem(); };
+  $('#addItemBtn').onclick=add; $('#abAdd').onclick=add;
+  const commit=()=>commitChangesFlow(); $('#commitBtn').onclick=commit; $('#abCommit').onclick=commit;
+  const disc=()=>discardPending(); $('#discardBtn').onclick=disc; $('#abDiscard').onclick=disc;
+
+  $('#searchInput').oninput=e=>{ state.filters.search=e.target.value; renderItems(); if(!$('#tab-stats').classList.contains('d-none')) renderStats(); };
+  $('#sortSelect').onchange=e=>{ state.filters.sort=e.target.value; renderItems(); if(!$('#tab-stats').classList.contains('d-none')) renderStats(); };
+
+  $('#filterHistoryBtn').onclick=renderHistory; $('#historySearch').oninput=renderHistory;
+
+  const csv=()=>exportCsv(); const pdf=()=>exportPdf(); const setg=()=>openSettings();
+  $('#exportCsvBtn').onclick=csv; $('#exportPdfBtn').onclick=pdf; $('#settingsBtn').onclick=setg;
+  $('#exportCsvBtn2').onclick=csv; $('#exportPdfBtn2').onclick=pdf; $('#settingsBtn2').onclick=setg;
+
+  $$('.authMode').forEach(r=>r.addEventListener('change',e=>{ state.authMode=e.target.value; saveAll(); renderUsers(); }));
+  $('#addUserBtn').onclick=()=>{
+    const name=$('#newUserName').value.trim(); const pin=$('#newUserPin').value.trim();
+    if(!name) return toast('กรอกชื่อผู้ใช้');
+    if(!pin || pin.length<4 || pin.length>8) return toast('PIN 4–8 หลัก');
+    if(state.users.length>=20) return toast('ครบ 20 คนแล้ว');
+    if(state.users.some(u=>u.name===name)) return toast('มีชื่อนี้แล้ว');
+    state.users.push({id:uid(),name,pin}); saveAll();
+    $('#newUserName').value=''; $('#newUserPin').value=''; renderUsers(); toast('เพิ่มผู้ใช้แล้ว');
+  };
+  $('#usersList').addEventListener('click',e=>{
+    const btn=e.target.closest('button'); if(!btn) return;
+    const id=btn.dataset.id, act=btn.dataset.act, u=state.users.find(x=>x.id===id); if(!u) return;
+    if(act==='remove'){ if(getCurrentUser()&&getCurrentUser().id===id) state.currentUserId=null; state.users=state.users.filter(x=>x.id!==id); saveAll(); renderUsers(); toast('ลบผู้ใช้แล้ว'); }
+    if(act==='reset'){ showModal(html=>{ html.innerHTML=`<div class="modal-header"><h5 class="modal-title">รีเซ็ต PIN: ${u.name}</h5></div>
+        <div class="modal-body"><input id="np" class="form-control" placeholder="ใส่ PIN ใหม่ (4–8 หลัก)"></div>
+        <div class="modal-footer"><button class="btn btn-outline-secondary" data-close>ยกเลิก</button><button class="btn btn-danger" id="ok">บันทึก</button></div>`;
+      html.querySelector('#ok').onclick=()=>{ const v=html.querySelector('#np').value.trim(); if(!v||v.length<4||v.length>8) return toast('PIN 4–8 หลัก'); u.pin=v; saveAll(); html.parentElement.remove(); toast('อัปเดต PIN แล้ว'); }; }); }
+  });
+
+  $('#clearAllBtn').onclick=()=>{ showConfirmModal('ล้างข้อมูลทั้งหมดในเครื่องนี้?',()=>{ Object.values(KEYS).forEach(k=>localStorage.removeItem(k)); loadAll(); renderAll(); toast('ล้างข้อมูลแล้ว'); }); };
+
+  $('#refreshChartBtn').onclick=renderStats; $('#chartType').onchange=renderStats;
+}
+
+function renderAll(){ renderUsers(); renderItems(); renderHistory(); notifyLowStock(); switchTab('stock'); }
+
+loadAll(); bindEvents(); renderAll();
+</script>
+</body>
+</html>
